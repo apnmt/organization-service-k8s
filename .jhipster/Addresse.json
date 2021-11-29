@@ -1,0 +1,47 @@
+{
+  "name": "Addresse",
+  "fields": [
+    {
+      "fieldName": "line1",
+      "fieldType": "String",
+      "fieldValidateRules": ["required"]
+    },
+    {
+      "fieldName": "city",
+      "fieldType": "String",
+      "fieldValidateRules": ["required"]
+    },
+    {
+      "fieldName": "postalCode",
+      "fieldType": "String",
+      "fieldValidateRules": ["required"]
+    },
+    {
+      "fieldName": "country",
+      "fieldType": "String",
+      "fieldValidateRules": ["required"]
+    }
+  ],
+  "relationships": [
+    {
+      "relationshipType": "one-to-one",
+      "otherEntityName": "organization",
+      "otherEntityRelationshipName": "addresse",
+      "relationshipName": "organization",
+      "ownerSide": true
+    }
+  ],
+  "entityTableName": "addresse",
+  "dto": "mapstruct",
+  "pagination": "no",
+  "service": "serviceClass",
+  "jpaMetamodelFiltering": false,
+  "fluentMethods": true,
+  "readOnly": false,
+  "embedded": false,
+  "applications": ["OrganizationService"],
+  "microserviceName": "OrganizationService",
+  "clientRootFolder": "OrganizationService",
+  "databaseType": "sql",
+  "changelogDate": "20211129141833"
+}

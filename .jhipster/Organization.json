@@ -1,0 +1,70 @@
+{
+  "name": "Organization",
+  "fields": [
+    {
+      "fieldName": "name",
+      "fieldType": "String",
+      "fieldValidateRules": ["required"]
+    },
+    {
+      "fieldName": "mail",
+      "fieldType": "String",
+      "fieldValidateRules": ["required"]
+    },
+    {
+      "fieldName": "phone",
+      "fieldType": "String",
+      "fieldValidateRules": ["required"]
+    },
+    {
+      "fieldName": "ownerId",
+      "fieldType": "Long",
+      "fieldValidateRules": ["required"]
+    },
+    {
+      "fieldName": "active",
+      "fieldType": "Boolean",
+      "fieldValidateRules": ["required"]
+    }
+  ],
+  "relationships": [
+    {
+      "relationshipType": "one-to-many",
+      "otherEntityName": "closingTime",
+      "otherEntityRelationshipName": "organization",
+      "relationshipName": "closingTime"
+    },
+    {
+      "relationshipType": "one-to-many",
+      "otherEntityName": "openingHour",
+      "otherEntityRelationshipName": "organization",
+      "relationshipName": "openingHour"
+    },
+    {
+      "relationshipType": "one-to-many",
+      "otherEntityName": "employee",
+      "otherEntityRelationshipName": "organization",
+      "relationshipName": "employee"
+    },
+    {
+      "relationshipType": "one-to-one",
+      "otherEntityName": "addresse",
+      "otherEntityRelationshipName": "organization",
+      "relationshipName": "addresse",
+      "ownerSide": false
+    }
+  ],
+  "entityTableName": "organization",
+  "dto": "mapstruct",
+  "pagination": "pagination",
+  "service": "serviceClass",
+  "jpaMetamodelFiltering": false,
+  "fluentMethods": true,
+  "readOnly": false,
+  "embedded": false,
+  "applications": ["OrganizationService"],
+  "microserviceName": "OrganizationService",
+  "clientRootFolder": "OrganizationService",
+  "databaseType": "sql",
+  "changelogDate": "20211129141733"
+}

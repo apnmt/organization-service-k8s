@@ -1,0 +1,80 @@
+application {
+  config {
+    baseName organizationservice,
+    applicationType microservice,
+    packageName de.apnmt.organization,
+    authenticationType jwt,
+    prodDatabaseType postgresql,
+    devDatabaseType h2Memory,
+    enableSwaggerCodegen true,
+    skipClient true,
+    cacheProvider no,
+    skipUserManagement true,
+    serviceDiscoveryType no,
+    serverPort 8082
+  }
+  entities *
+}
+entity Organization {
+	name String required,
+    mail String required,
+    phone String required,
+    ownerId Long required,
+    active Boolean required
+}
+
+entity Addresse {
+	line1 String required,
+    city String required,
+    postalCode String required,
+    country String required
+}
+
+entity ClosingTime {
+	startAt Instant required,
+    endAt Instant required
+}
+
+entity OpeningHour {
+	day Day,
+    startTime Instant required,
+    endTime Instant required
+}
+
+enum Day {
+	Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
+}
+
+
+entity Employee {
+	firstName String required,
+    lastName String required,
+    mail String required,
+    phone String required
+}
+
+entity WorkingHour {
+	startAt Instant required,
+    endAt Instant required
+}
+
+relationship OneToOne {
+	Addresse{organization} to Organization{addresse}
+}
+
+// defining multiple OneToMany relationships with comments
+relationship OneToMany {
+	Organization to ClosingTime{organization},
+	Organization to OpeningHour{organization},
+    Organization to Employee{organization},
+    Employee to WorkingHour{employee}
+}
+
+// Set pagination options
+paginate Organization with pagination
+
+// Use Data Transfer Objects (DTO)
+dto * with mapstruct
+
+// Set service options to all except few
+service all with serviceClass
