@@ -13,17 +13,10 @@
 # http://docs.spring.io/spring-boot/docs/current/reference/html/common-application-properties.html
 # ===================================================================
 
-eureka:
-  client:
-    enabled: false
-  instance:
-    appname: OrganizationService
-    instanceId: OrganizationService:${spring.application.instance-id:${random.value}}
-
 spring:
   profiles:
-    # Uncomment the following line to enable tests against production database type rather than H2, using Testcontainers
-    #active: testcontainers
+  # Uncomment the following line to enable tests against production database type rather than H2, using Testcontainers
+  #active: testcontainers
   application:
     name: OrganizationService
   cloud:
