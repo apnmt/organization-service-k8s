@@ -19,7 +19,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Optional;
 
-@SpringBootApplication(scanBasePackages = {"de.apnmt.organization.common", "de.apnmt.organization"})
+@SpringBootApplication(scanBasePackages = {"de.apnmt.common", "de.apnmt.organization.common", "de.apnmt.organization"})
 @EnableConfigurationProperties({LiquibaseProperties.class, ApplicationProperties.class})
 public class OrganizationserviceApp {
 

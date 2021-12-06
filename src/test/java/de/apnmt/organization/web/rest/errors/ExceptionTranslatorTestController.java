@@ -1,8 +1,10 @@
 package de.apnmt.organization.web.rest.errors;
 
+import de.apnmt.common.errors.HttpError;
 import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.zalando.problem.Status;
 
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
@@ -17,13 +19,16 @@ public class ExceptionTranslatorTestController {
     }
 
     @PostMapping("/method-argument")
-    public void methodArgument(@Valid @RequestBody TestDTO testDTO) {}
+    public void methodArgument(@Valid @RequestBody TestDTO testDTO) {
+    }
 
     @GetMapping("/missing-servlet-request-part")
-    public void missingServletRequestPartException(@RequestPart String part) {}
+    public void missingServletRequestPartException(@RequestPart String part) {
+    }
 
     @GetMapping("/missing-servlet-request-parameter")
-    public void missingServletRequestParameterException(@RequestParam String param) {}
+    public void missingServletRequestParameterException(@RequestParam String param) {
+    }
 
     @GetMapping("/response-status")
     public void exceptionWithResponseStatus() {
@@ -33,6 +38,11 @@ public class ExceptionTranslatorTestController {
     @GetMapping("/internal-server-error")
     public void internalServerError() {
         throw new RuntimeException();
+    }
+
+    @GetMapping("/http-error")
+    public void httpError() {
+        throw new HttpError(Status.NOT_FOUND, "http.error.not.found", "Http Error Not Found");
     }
 
     public static class TestDTO {
@@ -51,5 +61,6 @@ public class ExceptionTranslatorTestController {
 
     @ResponseStatus(value = HttpStatus.BAD_REQUEST, reason = "test response status")
     @SuppressWarnings("serial")
-    public static class TestResponseStatusException extends RuntimeException {}
+    public static class TestResponseStatusException extends RuntimeException {
+    }
 }
