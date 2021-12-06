@@ -1,6 +1,8 @@
 package de.apnmt.organization.web.rest;
 
 import de.apnmt.common.enumeration.Day;
+import de.apnmt.common.event.value.OpeningHourEventDTO;
+import de.apnmt.common.sender.ApnmtEventSender;
 import de.apnmt.organization.IntegrationTest;
 import de.apnmt.organization.common.domain.OpeningHour;
 import de.apnmt.organization.common.repository.OpeningHourRepository;
@@ -9,9 +11,14 @@ import de.apnmt.organization.common.service.mapper.OpeningHourMapper;
 import de.apnmt.organization.common.web.rest.OpeningHourResource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @IntegrationTest
 @AutoConfigureMockMvc
+@ContextConfiguration(classes = {OpeningHourResourceIT.EventSenderConfig.class})
 class OpeningHourResourceIT {
 
     private static final Day DEFAULT_DAY = Day.Monday;
@@ -455,5 +463,18 @@ class OpeningHourResourceIT {
         // Validate the database contains one less item
         List<OpeningHour> openingHourList = this.openingHourRepository.findAll();
         assertThat(openingHourList).hasSize(databaseSizeBeforeDelete - 1);
+    }
+
+    @TestConfiguration
+    public static class EventSenderConfig {
+        private final Logger log = LoggerFactory.getLogger(EventSenderConfig.class);
+
+        @Bean
+        public ApnmtEventSender<OpeningHourEventDTO> sender() {
+            return (topic, event) -> {
+                this.log.info("Event send to topic {}", topic);
+            };
+        }
+
     }
 }
