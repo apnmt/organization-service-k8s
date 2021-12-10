@@ -1,46 +1,58 @@
 package de.apnmt.organization.web.rest;
 
-import de.apnmt.common.enumeration.Day;
-import de.apnmt.common.event.value.OpeningHourEventDTO;
-import de.apnmt.common.sender.ApnmtEventSender;
-import de.apnmt.organization.IntegrationTest;
-import de.apnmt.organization.common.domain.OpeningHour;
-import de.apnmt.organization.common.repository.OpeningHourRepository;
-import de.apnmt.organization.common.service.dto.OpeningHourDTO;
-import de.apnmt.organization.common.service.mapper.OpeningHourMapper;
-import de.apnmt.organization.common.web.rest.OpeningHourResource;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.http.MediaType;
-import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.annotation.Transactional;
-
-import javax.persistence.EntityManager;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
+import javax.persistence.EntityManager;
+import com.fasterxml.jackson.core.type.TypeReference;
+import de.apnmt.common.TopicConstants;
+import de.apnmt.common.enumeration.Day;
+import de.apnmt.common.event.ApnmtEvent;
+import de.apnmt.common.event.ApnmtEventType;
+import de.apnmt.common.event.value.OpeningHourEventDTO;
+import de.apnmt.k8s.common.test.AbstractEventSenderIT;
+import de.apnmt.organization.IntegrationTest;
+import de.apnmt.organization.common.domain.OpeningHour;
+import de.apnmt.organization.common.domain.Organization;
+import de.apnmt.organization.common.repository.OpeningHourRepository;
+import de.apnmt.organization.common.repository.OrganizationRepository;
+import de.apnmt.organization.common.service.dto.OpeningHourDTO;
+import de.apnmt.organization.common.service.mapper.OpeningHourMapper;
+import de.apnmt.organization.common.web.rest.OpeningHourResource;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.kafka.annotation.EnableKafka;
+import org.springframework.kafka.test.context.EmbeddedKafka;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItem;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * Integration tests for the {@link OpeningHourResource} REST controller.
  */
+@EnableKafka
+@EmbeddedKafka(ports = {58255}, topics = {TopicConstants.OPENING_HOUR_CHANGED_TOPIC})
 @IntegrationTest
 @AutoConfigureMockMvc
-@ContextConfiguration(classes = {OpeningHourResourceIT.EventSenderConfig.class})
-class OpeningHourResourceIT {
+class OpeningHourResourceIT extends AbstractEventSenderIT {
 
     private static final Day DEFAULT_DAY = Day.Monday;
     private static final Day UPDATED_DAY = Day.Tuesday;
@@ -62,6 +74,9 @@ class OpeningHourResourceIT {
 
     @Autowired
     private OpeningHourMapper openingHourMapper;
+
+    @Autowired
+    private OrganizationRepository organizationRepository;
 
     @Autowired
     private EntityManager em;
@@ -93,9 +108,23 @@ class OpeningHourResourceIT {
         return openingHour;
     }
 
+    @Override
+    public String getTopic() {
+        return TopicConstants.OPENING_HOUR_CHANGED_TOPIC;
+    }
+
     @BeforeEach
     public void initTest() {
+        Organization organization = OrganizationResourceIT.createEntity(this.em);
+        this.organizationRepository.saveAndFlush(organization);
         this.openingHour = createEntity(this.em);
+        this.openingHour.setOrganization(organization);
+    }
+
+    @AfterEach
+    public void shutDown() throws InterruptedException {
+        // All topics should be empty now
+        assertThat(this.records.poll(500, TimeUnit.MILLISECONDS)).isNull();
     }
 
     @Test
@@ -104,10 +133,7 @@ class OpeningHourResourceIT {
         int databaseSizeBeforeCreate = this.openingHourRepository.findAll().size();
         // Create the OpeningHour
         OpeningHourDTO openingHourDTO = this.openingHourMapper.toDto(this.openingHour);
-        this.restOpeningHourMockMvc
-            .perform(
-                post(ENTITY_API_URL).contentType(MediaType.APPLICATION_JSON).content(TestUtil.convertObjectToJsonBytes(openingHourDTO))
-            )
+        this.restOpeningHourMockMvc.perform(post(ENTITY_API_URL).contentType(MediaType.APPLICATION_JSON).content(TestUtil.convertObjectToJsonBytes(openingHourDTO)))
             .andExpect(status().isCreated());
 
         // Validate the OpeningHour in the database
@@ -117,6 +143,20 @@ class OpeningHourResourceIT {
         assertThat(testOpeningHour.getDay()).isEqualTo(DEFAULT_DAY);
         assertThat(testOpeningHour.getStartTime()).isEqualTo(DEFAULT_START_TIME);
         assertThat(testOpeningHour.getEndTime()).isEqualTo(DEFAULT_END_TIME);
+
+        ConsumerRecord<String, Object> message = this.records.poll(500, TimeUnit.MILLISECONDS);
+        assertThat(message).isNotNull();
+        assertThat(message.value()).isNotNull();
+
+        TypeReference<ApnmtEvent<OpeningHourEventDTO>> eventType = new TypeReference<>() {
+        };
+        ApnmtEvent<OpeningHourEventDTO> eventResult = this.objectMapper.readValue(message.value().toString(), eventType);
+        assertThat(eventResult.getType()).isEqualTo(ApnmtEventType.openingHourCreated);
+        OpeningHourEventDTO openingHourEventDTO = eventResult.getValue();
+        assertThat(openingHourEventDTO.getId()).isEqualTo(testOpeningHour.getId());
+        assertThat(openingHourEventDTO.getOrganizationId()).isEqualTo(testOpeningHour.getOrganization().getId());
+        assertThat(openingHourEventDTO.getStartTime()).isEqualTo(testOpeningHour.getStartTime());
+        assertThat(openingHourEventDTO.getEndTime()).isEqualTo(testOpeningHour.getEndTime());
     }
 
     @Test
@@ -129,10 +169,7 @@ class OpeningHourResourceIT {
         int databaseSizeBeforeCreate = this.openingHourRepository.findAll().size();
 
         // An entity with an existing ID cannot be created, so this API call must fail
-        this.restOpeningHourMockMvc
-            .perform(
-                post(ENTITY_API_URL).contentType(MediaType.APPLICATION_JSON).content(TestUtil.convertObjectToJsonBytes(openingHourDTO))
-            )
+        this.restOpeningHourMockMvc.perform(post(ENTITY_API_URL).contentType(MediaType.APPLICATION_JSON).content(TestUtil.convertObjectToJsonBytes(openingHourDTO)))
             .andExpect(status().isBadRequest());
 
         // Validate the OpeningHour in the database
@@ -150,10 +187,7 @@ class OpeningHourResourceIT {
         // Create the OpeningHour, which fails.
         OpeningHourDTO openingHourDTO = this.openingHourMapper.toDto(this.openingHour);
 
-        this.restOpeningHourMockMvc
-            .perform(
-                post(ENTITY_API_URL).contentType(MediaType.APPLICATION_JSON).content(TestUtil.convertObjectToJsonBytes(openingHourDTO))
-            )
+        this.restOpeningHourMockMvc.perform(post(ENTITY_API_URL).contentType(MediaType.APPLICATION_JSON).content(TestUtil.convertObjectToJsonBytes(openingHourDTO)))
             .andExpect(status().isBadRequest());
 
         List<OpeningHour> openingHourList = this.openingHourRepository.findAll();
@@ -170,10 +204,7 @@ class OpeningHourResourceIT {
         // Create the OpeningHour, which fails.
         OpeningHourDTO openingHourDTO = this.openingHourMapper.toDto(this.openingHour);
 
-        this.restOpeningHourMockMvc
-            .perform(
-                post(ENTITY_API_URL).contentType(MediaType.APPLICATION_JSON).content(TestUtil.convertObjectToJsonBytes(openingHourDTO))
-            )
+        this.restOpeningHourMockMvc.perform(post(ENTITY_API_URL).contentType(MediaType.APPLICATION_JSON).content(TestUtil.convertObjectToJsonBytes(openingHourDTO)))
             .andExpect(status().isBadRequest());
 
         List<OpeningHour> openingHourList = this.openingHourRepository.findAll();
@@ -187,8 +218,7 @@ class OpeningHourResourceIT {
         this.openingHourRepository.saveAndFlush(this.openingHour);
 
         // Get all the openingHourList
-        this.restOpeningHourMockMvc
-            .perform(get(ENTITY_API_URL + "?sort=id,desc"))
+        this.restOpeningHourMockMvc.perform(get(ENTITY_API_URL + "?sort=id,desc"))
             .andExpect(status().isOk())
             .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
             .andExpect(jsonPath("$.[*].id").value(hasItem(this.openingHour.getId().intValue())))
@@ -204,8 +234,7 @@ class OpeningHourResourceIT {
         this.openingHourRepository.saveAndFlush(this.openingHour);
 
         // Get the openingHour
-        this.restOpeningHourMockMvc
-            .perform(get(ENTITY_API_URL_ID, this.openingHour.getId()))
+        this.restOpeningHourMockMvc.perform(get(ENTITY_API_URL_ID, this.openingHour.getId()))
             .andExpect(status().isOk())
             .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
             .andExpect(jsonPath("$.id").value(this.openingHour.getId().intValue()))
@@ -236,13 +265,8 @@ class OpeningHourResourceIT {
         updatedOpeningHour.day(UPDATED_DAY).startTime(UPDATED_START_TIME).endTime(UPDATED_END_TIME);
         OpeningHourDTO openingHourDTO = this.openingHourMapper.toDto(updatedOpeningHour);
 
-        this.restOpeningHourMockMvc
-            .perform(
-                put(ENTITY_API_URL_ID, openingHourDTO.getId())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(TestUtil.convertObjectToJsonBytes(openingHourDTO))
-            )
-            .andExpect(status().isOk());
+        this.restOpeningHourMockMvc.perform(put(ENTITY_API_URL_ID, openingHourDTO.getId()).contentType(MediaType.APPLICATION_JSON)
+            .content(TestUtil.convertObjectToJsonBytes(openingHourDTO))).andExpect(status().isOk());
 
         // Validate the OpeningHour in the database
         List<OpeningHour> openingHourList = this.openingHourRepository.findAll();
@@ -251,6 +275,21 @@ class OpeningHourResourceIT {
         assertThat(testOpeningHour.getDay()).isEqualTo(UPDATED_DAY);
         assertThat(testOpeningHour.getStartTime()).isEqualTo(UPDATED_START_TIME);
         assertThat(testOpeningHour.getEndTime()).isEqualTo(UPDATED_END_TIME);
+
+
+        ConsumerRecord<String, Object> message = this.records.poll(500, TimeUnit.MILLISECONDS);
+        assertThat(message).isNotNull();
+        assertThat(message.value()).isNotNull();
+
+        TypeReference<ApnmtEvent<OpeningHourEventDTO>> eventType = new TypeReference<>() {
+        };
+        ApnmtEvent<OpeningHourEventDTO> eventResult = this.objectMapper.readValue(message.value().toString(), eventType);
+        assertThat(eventResult.getType()).isEqualTo(ApnmtEventType.openingHourCreated);
+        OpeningHourEventDTO openingHourEventDTO = eventResult.getValue();
+        assertThat(openingHourEventDTO.getId()).isEqualTo(testOpeningHour.getId());
+        assertThat(openingHourEventDTO.getOrganizationId()).isEqualTo(testOpeningHour.getOrganization().getId());
+        assertThat(openingHourEventDTO.getStartTime()).isEqualTo(testOpeningHour.getStartTime());
+        assertThat(openingHourEventDTO.getEndTime()).isEqualTo(testOpeningHour.getEndTime());
     }
 
     @Test
@@ -263,13 +302,8 @@ class OpeningHourResourceIT {
         OpeningHourDTO openingHourDTO = this.openingHourMapper.toDto(this.openingHour);
 
         // If the entity doesn't have an ID, it will throw BadRequestAlertException
-        this.restOpeningHourMockMvc
-            .perform(
-                put(ENTITY_API_URL_ID, openingHourDTO.getId())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(TestUtil.convertObjectToJsonBytes(openingHourDTO))
-            )
-            .andExpect(status().isBadRequest());
+        this.restOpeningHourMockMvc.perform(put(ENTITY_API_URL_ID, openingHourDTO.getId()).contentType(MediaType.APPLICATION_JSON)
+            .content(TestUtil.convertObjectToJsonBytes(openingHourDTO))).andExpect(status().isBadRequest());
 
         // Validate the OpeningHour in the database
         List<OpeningHour> openingHourList = this.openingHourRepository.findAll();
@@ -286,13 +320,8 @@ class OpeningHourResourceIT {
         OpeningHourDTO openingHourDTO = this.openingHourMapper.toDto(this.openingHour);
 
         // If url ID doesn't match entity ID, it will throw BadRequestAlertException
-        this.restOpeningHourMockMvc
-            .perform(
-                put(ENTITY_API_URL_ID, count.incrementAndGet())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(TestUtil.convertObjectToJsonBytes(openingHourDTO))
-            )
-            .andExpect(status().isBadRequest());
+        this.restOpeningHourMockMvc.perform(put(ENTITY_API_URL_ID, count.incrementAndGet()).contentType(MediaType.APPLICATION_JSON)
+            .content(TestUtil.convertObjectToJsonBytes(openingHourDTO))).andExpect(status().isBadRequest());
 
         // Validate the OpeningHour in the database
         List<OpeningHour> openingHourList = this.openingHourRepository.findAll();
@@ -309,8 +338,7 @@ class OpeningHourResourceIT {
         OpeningHourDTO openingHourDTO = this.openingHourMapper.toDto(this.openingHour);
 
         // If url ID doesn't match entity ID, it will throw BadRequestAlertException
-        this.restOpeningHourMockMvc
-            .perform(put(ENTITY_API_URL).contentType(MediaType.APPLICATION_JSON).content(TestUtil.convertObjectToJsonBytes(openingHourDTO)))
+        this.restOpeningHourMockMvc.perform(put(ENTITY_API_URL).contentType(MediaType.APPLICATION_JSON).content(TestUtil.convertObjectToJsonBytes(openingHourDTO)))
             .andExpect(status().isMethodNotAllowed());
 
         // Validate the OpeningHour in the database
@@ -332,13 +360,8 @@ class OpeningHourResourceIT {
 
         partialUpdatedOpeningHour.day(UPDATED_DAY).endTime(UPDATED_END_TIME);
 
-        this.restOpeningHourMockMvc
-            .perform(
-                patch(ENTITY_API_URL_ID, partialUpdatedOpeningHour.getId())
-                    .contentType("application/merge-patch+json")
-                    .content(TestUtil.convertObjectToJsonBytes(partialUpdatedOpeningHour))
-            )
-            .andExpect(status().isOk());
+        this.restOpeningHourMockMvc.perform(patch(ENTITY_API_URL_ID, partialUpdatedOpeningHour.getId()).contentType("application/merge-patch+json")
+            .content(TestUtil.convertObjectToJsonBytes(partialUpdatedOpeningHour))).andExpect(status().isOk());
 
         // Validate the OpeningHour in the database
         List<OpeningHour> openingHourList = this.openingHourRepository.findAll();
@@ -347,6 +370,20 @@ class OpeningHourResourceIT {
         assertThat(testOpeningHour.getDay()).isEqualTo(UPDATED_DAY);
         assertThat(testOpeningHour.getStartTime()).isEqualTo(DEFAULT_START_TIME);
         assertThat(testOpeningHour.getEndTime()).isEqualTo(UPDATED_END_TIME);
+
+        ConsumerRecord<String, Object> message = this.records.poll(500, TimeUnit.MILLISECONDS);
+        assertThat(message).isNotNull();
+        assertThat(message.value()).isNotNull();
+
+        TypeReference<ApnmtEvent<OpeningHourEventDTO>> eventType = new TypeReference<>() {
+        };
+        ApnmtEvent<OpeningHourEventDTO> eventResult = this.objectMapper.readValue(message.value().toString(), eventType);
+        assertThat(eventResult.getType()).isEqualTo(ApnmtEventType.openingHourCreated);
+        OpeningHourEventDTO openingHourEventDTO = eventResult.getValue();
+        assertThat(openingHourEventDTO.getId()).isEqualTo(testOpeningHour.getId());
+        assertThat(openingHourEventDTO.getOrganizationId()).isEqualTo(testOpeningHour.getOrganization().getId());
+        assertThat(openingHourEventDTO.getStartTime()).isEqualTo(testOpeningHour.getStartTime());
+        assertThat(openingHourEventDTO.getEndTime()).isEqualTo(testOpeningHour.getEndTime());
     }
 
     @Test
@@ -363,13 +400,8 @@ class OpeningHourResourceIT {
 
         partialUpdatedOpeningHour.day(UPDATED_DAY).startTime(UPDATED_START_TIME).endTime(UPDATED_END_TIME);
 
-        this.restOpeningHourMockMvc
-            .perform(
-                patch(ENTITY_API_URL_ID, partialUpdatedOpeningHour.getId())
-                    .contentType("application/merge-patch+json")
-                    .content(TestUtil.convertObjectToJsonBytes(partialUpdatedOpeningHour))
-            )
-            .andExpect(status().isOk());
+        this.restOpeningHourMockMvc.perform(patch(ENTITY_API_URL_ID, partialUpdatedOpeningHour.getId()).contentType("application/merge-patch+json")
+            .content(TestUtil.convertObjectToJsonBytes(partialUpdatedOpeningHour))).andExpect(status().isOk());
 
         // Validate the OpeningHour in the database
         List<OpeningHour> openingHourList = this.openingHourRepository.findAll();
@@ -378,6 +410,21 @@ class OpeningHourResourceIT {
         assertThat(testOpeningHour.getDay()).isEqualTo(UPDATED_DAY);
         assertThat(testOpeningHour.getStartTime()).isEqualTo(UPDATED_START_TIME);
         assertThat(testOpeningHour.getEndTime()).isEqualTo(UPDATED_END_TIME);
+
+
+        ConsumerRecord<String, Object> message = this.records.poll(500, TimeUnit.MILLISECONDS);
+        assertThat(message).isNotNull();
+        assertThat(message.value()).isNotNull();
+
+        TypeReference<ApnmtEvent<OpeningHourEventDTO>> eventType = new TypeReference<>() {
+        };
+        ApnmtEvent<OpeningHourEventDTO> eventResult = this.objectMapper.readValue(message.value().toString(), eventType);
+        assertThat(eventResult.getType()).isEqualTo(ApnmtEventType.openingHourCreated);
+        OpeningHourEventDTO openingHourEventDTO = eventResult.getValue();
+        assertThat(openingHourEventDTO.getId()).isEqualTo(testOpeningHour.getId());
+        assertThat(openingHourEventDTO.getOrganizationId()).isEqualTo(testOpeningHour.getOrganization().getId());
+        assertThat(openingHourEventDTO.getStartTime()).isEqualTo(testOpeningHour.getStartTime());
+        assertThat(openingHourEventDTO.getEndTime()).isEqualTo(testOpeningHour.getEndTime());
     }
 
     @Test
@@ -390,13 +437,8 @@ class OpeningHourResourceIT {
         OpeningHourDTO openingHourDTO = this.openingHourMapper.toDto(this.openingHour);
 
         // If the entity doesn't have an ID, it will throw BadRequestAlertException
-        this.restOpeningHourMockMvc
-            .perform(
-                patch(ENTITY_API_URL_ID, openingHourDTO.getId())
-                    .contentType("application/merge-patch+json")
-                    .content(TestUtil.convertObjectToJsonBytes(openingHourDTO))
-            )
-            .andExpect(status().isBadRequest());
+        this.restOpeningHourMockMvc.perform(patch(ENTITY_API_URL_ID, openingHourDTO.getId()).contentType("application/merge-patch+json")
+            .content(TestUtil.convertObjectToJsonBytes(openingHourDTO))).andExpect(status().isBadRequest());
 
         // Validate the OpeningHour in the database
         List<OpeningHour> openingHourList = this.openingHourRepository.findAll();
@@ -413,13 +455,8 @@ class OpeningHourResourceIT {
         OpeningHourDTO openingHourDTO = this.openingHourMapper.toDto(this.openingHour);
 
         // If url ID doesn't match entity ID, it will throw BadRequestAlertException
-        this.restOpeningHourMockMvc
-            .perform(
-                patch(ENTITY_API_URL_ID, count.incrementAndGet())
-                    .contentType("application/merge-patch+json")
-                    .content(TestUtil.convertObjectToJsonBytes(openingHourDTO))
-            )
-            .andExpect(status().isBadRequest());
+        this.restOpeningHourMockMvc.perform(patch(ENTITY_API_URL_ID, count.incrementAndGet()).contentType("application/merge-patch+json")
+            .content(TestUtil.convertObjectToJsonBytes(openingHourDTO))).andExpect(status().isBadRequest());
 
         // Validate the OpeningHour in the database
         List<OpeningHour> openingHourList = this.openingHourRepository.findAll();
@@ -436,10 +473,7 @@ class OpeningHourResourceIT {
         OpeningHourDTO openingHourDTO = this.openingHourMapper.toDto(this.openingHour);
 
         // If url ID doesn't match entity ID, it will throw BadRequestAlertException
-        this.restOpeningHourMockMvc
-            .perform(
-                patch(ENTITY_API_URL).contentType("application/merge-patch+json").content(TestUtil.convertObjectToJsonBytes(openingHourDTO))
-            )
+        this.restOpeningHourMockMvc.perform(patch(ENTITY_API_URL).contentType("application/merge-patch+json").content(TestUtil.convertObjectToJsonBytes(openingHourDTO)))
             .andExpect(status().isMethodNotAllowed());
 
         // Validate the OpeningHour in the database
@@ -456,25 +490,25 @@ class OpeningHourResourceIT {
         int databaseSizeBeforeDelete = this.openingHourRepository.findAll().size();
 
         // Delete the openingHour
-        this.restOpeningHourMockMvc
-            .perform(delete(ENTITY_API_URL_ID, this.openingHour.getId()).accept(MediaType.APPLICATION_JSON))
-            .andExpect(status().isNoContent());
+        this.restOpeningHourMockMvc.perform(delete(ENTITY_API_URL_ID, this.openingHour.getId()).accept(MediaType.APPLICATION_JSON)).andExpect(status().isNoContent());
 
         // Validate the database contains one less item
         List<OpeningHour> openingHourList = this.openingHourRepository.findAll();
         assertThat(openingHourList).hasSize(databaseSizeBeforeDelete - 1);
-    }
 
-    @TestConfiguration
-    public static class EventSenderConfig {
-        private final Logger log = LoggerFactory.getLogger(EventSenderConfig.class);
 
-        @Bean
-        public ApnmtEventSender<OpeningHourEventDTO> sender() {
-            return (topic, event) -> {
-                this.log.info("Event send to topic {}", topic);
-            };
-        }
+        ConsumerRecord<String, Object> message = this.records.poll(500, TimeUnit.MILLISECONDS);
+        assertThat(message).isNotNull();
+        assertThat(message.value()).isNotNull();
 
+        TypeReference<ApnmtEvent<OpeningHourEventDTO>> eventType = new TypeReference<>() {
+        };
+        ApnmtEvent<OpeningHourEventDTO> eventResult = this.objectMapper.readValue(message.value().toString(), eventType);
+        assertThat(eventResult.getType()).isEqualTo(ApnmtEventType.openingHourDeleted);
+        OpeningHourEventDTO openingHourEventDTO = eventResult.getValue();
+        assertThat(openingHourEventDTO.getId()).isEqualTo(this.openingHour.getId());
+        assertThat(openingHourEventDTO.getOrganizationId()).isEqualTo(this.openingHour.getOrganization().getId());
+        assertThat(openingHourEventDTO.getStartTime()).isEqualTo(this.openingHour.getStartTime());
+        assertThat(openingHourEventDTO.getEndTime()).isEqualTo(this.openingHour.getEndTime());
     }
 }

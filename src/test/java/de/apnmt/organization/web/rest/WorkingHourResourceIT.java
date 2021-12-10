@@ -1,45 +1,57 @@
 package de.apnmt.organization.web.rest;
 
-import de.apnmt.common.event.value.WorkingHourEventDTO;
-import de.apnmt.common.sender.ApnmtEventSender;
-import de.apnmt.organization.IntegrationTest;
-import de.apnmt.organization.common.domain.WorkingHour;
-import de.apnmt.organization.common.repository.WorkingHourRepository;
-import de.apnmt.organization.common.service.dto.WorkingHourDTO;
-import de.apnmt.organization.common.service.mapper.WorkingHourMapper;
-import de.apnmt.organization.common.web.rest.WorkingHourResource;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.http.MediaType;
-import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.annotation.Transactional;
-
-import javax.persistence.EntityManager;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
+import javax.persistence.EntityManager;
+import com.fasterxml.jackson.core.type.TypeReference;
+import de.apnmt.common.TopicConstants;
+import de.apnmt.common.event.ApnmtEvent;
+import de.apnmt.common.event.ApnmtEventType;
+import de.apnmt.common.event.value.WorkingHourEventDTO;
+import de.apnmt.k8s.common.test.AbstractEventSenderIT;
+import de.apnmt.organization.IntegrationTest;
+import de.apnmt.organization.common.domain.Employee;
+import de.apnmt.organization.common.domain.WorkingHour;
+import de.apnmt.organization.common.repository.EmployeeRepository;
+import de.apnmt.organization.common.repository.WorkingHourRepository;
+import de.apnmt.organization.common.service.dto.WorkingHourDTO;
+import de.apnmt.organization.common.service.mapper.WorkingHourMapper;
+import de.apnmt.organization.common.web.rest.WorkingHourResource;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.kafka.annotation.EnableKafka;
+import org.springframework.kafka.test.context.EmbeddedKafka;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItem;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * Integration tests for the {@link WorkingHourResource} REST controller.
  */
+@EnableKafka
+@EmbeddedKafka(ports = {58255}, topics = {TopicConstants.OPENING_HOUR_CHANGED_TOPIC})
 @IntegrationTest
 @AutoConfigureMockMvc
-@ContextConfiguration(classes = {WorkingHourResourceIT.EventSenderConfig.class})
-class WorkingHourResourceIT {
+class WorkingHourResourceIT extends AbstractEventSenderIT {
 
     private static final LocalDateTime DEFAULT_START_AT = LocalDateTime.of(2021, 12, 24, 0, 0, 11, 0);
     private static final LocalDateTime UPDATED_START_AT = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS);
@@ -58,6 +70,9 @@ class WorkingHourResourceIT {
 
     @Autowired
     private WorkingHourMapper workingHourMapper;
+
+    @Autowired
+    private EmployeeRepository employeeRepository;
 
     @Autowired
     private EntityManager em;
@@ -89,9 +104,23 @@ class WorkingHourResourceIT {
         return workingHour;
     }
 
+    @Override
+    public String getTopic() {
+        return TopicConstants.WORKING_HOUR_CHANGED_TOPIC;
+    }
+
     @BeforeEach
     public void initTest() {
+        Employee employee = EmployeeResourceIT.createEntity(this.em);
+        this.employeeRepository.saveAndFlush(employee);
         this.workingHour = createEntity(this.em);
+        this.workingHour.setEmployee(employee);
+    }
+
+    @AfterEach
+    public void shutDown() throws InterruptedException {
+        // All topics should be empty now
+        assertThat(this.records.poll(500, TimeUnit.MILLISECONDS)).isNull();
     }
 
     @Test
@@ -100,10 +129,7 @@ class WorkingHourResourceIT {
         int databaseSizeBeforeCreate = this.workingHourRepository.findAll().size();
         // Create the WorkingHour
         WorkingHourDTO workingHourDTO = this.workingHourMapper.toDto(this.workingHour);
-        this.restWorkingHourMockMvc
-            .perform(
-                post(ENTITY_API_URL).contentType(MediaType.APPLICATION_JSON).content(TestUtil.convertObjectToJsonBytes(workingHourDTO))
-            )
+        this.restWorkingHourMockMvc.perform(post(ENTITY_API_URL).contentType(MediaType.APPLICATION_JSON).content(TestUtil.convertObjectToJsonBytes(workingHourDTO)))
             .andExpect(status().isCreated());
 
         // Validate the WorkingHour in the database
@@ -112,6 +138,20 @@ class WorkingHourResourceIT {
         WorkingHour testWorkingHour = workingHourList.get(workingHourList.size() - 1);
         assertThat(testWorkingHour.getStartAt()).isEqualTo(DEFAULT_START_AT);
         assertThat(testWorkingHour.getEndAt()).isEqualTo(DEFAULT_END_AT);
+
+        ConsumerRecord<String, Object> message = this.records.poll(500, TimeUnit.MILLISECONDS);
+        assertThat(message).isNotNull();
+        assertThat(message.value()).isNotNull();
+
+        TypeReference<ApnmtEvent<WorkingHourEventDTO>> eventType = new TypeReference<>() {
+        };
+        ApnmtEvent<WorkingHourEventDTO> eventResult = this.objectMapper.readValue(message.value().toString(), eventType);
+        assertThat(eventResult.getType()).isEqualTo(ApnmtEventType.workingHourCreated);
+        WorkingHourEventDTO workingHourEventDTO = eventResult.getValue();
+        assertThat(workingHourEventDTO.getId()).isEqualTo(testWorkingHour.getId());
+        assertThat(workingHourEventDTO.getEmployeeId()).isEqualTo(testWorkingHour.getEmployee().getId());
+        assertThat(workingHourEventDTO.getStartAt()).isEqualTo(testWorkingHour.getStartAt());
+        assertThat(workingHourEventDTO.getEndAt()).isEqualTo(testWorkingHour.getEndAt());
     }
 
     @Test
@@ -124,10 +164,7 @@ class WorkingHourResourceIT {
         int databaseSizeBeforeCreate = this.workingHourRepository.findAll().size();
 
         // An entity with an existing ID cannot be created, so this API call must fail
-        this.restWorkingHourMockMvc
-            .perform(
-                post(ENTITY_API_URL).contentType(MediaType.APPLICATION_JSON).content(TestUtil.convertObjectToJsonBytes(workingHourDTO))
-            )
+        this.restWorkingHourMockMvc.perform(post(ENTITY_API_URL).contentType(MediaType.APPLICATION_JSON).content(TestUtil.convertObjectToJsonBytes(workingHourDTO)))
             .andExpect(status().isBadRequest());
 
         // Validate the WorkingHour in the database
@@ -145,10 +182,7 @@ class WorkingHourResourceIT {
         // Create the WorkingHour, which fails.
         WorkingHourDTO workingHourDTO = this.workingHourMapper.toDto(this.workingHour);
 
-        this.restWorkingHourMockMvc
-            .perform(
-                post(ENTITY_API_URL).contentType(MediaType.APPLICATION_JSON).content(TestUtil.convertObjectToJsonBytes(workingHourDTO))
-            )
+        this.restWorkingHourMockMvc.perform(post(ENTITY_API_URL).contentType(MediaType.APPLICATION_JSON).content(TestUtil.convertObjectToJsonBytes(workingHourDTO)))
             .andExpect(status().isBadRequest());
 
         List<WorkingHour> workingHourList = this.workingHourRepository.findAll();
@@ -165,10 +199,7 @@ class WorkingHourResourceIT {
         // Create the WorkingHour, which fails.
         WorkingHourDTO workingHourDTO = this.workingHourMapper.toDto(this.workingHour);
 
-        this.restWorkingHourMockMvc
-            .perform(
-                post(ENTITY_API_URL).contentType(MediaType.APPLICATION_JSON).content(TestUtil.convertObjectToJsonBytes(workingHourDTO))
-            )
+        this.restWorkingHourMockMvc.perform(post(ENTITY_API_URL).contentType(MediaType.APPLICATION_JSON).content(TestUtil.convertObjectToJsonBytes(workingHourDTO)))
             .andExpect(status().isBadRequest());
 
         List<WorkingHour> workingHourList = this.workingHourRepository.findAll();
@@ -182,8 +213,7 @@ class WorkingHourResourceIT {
         this.workingHourRepository.saveAndFlush(this.workingHour);
 
         // Get all the workingHourList
-        this.restWorkingHourMockMvc
-            .perform(get(ENTITY_API_URL + "?sort=id,desc"))
+        this.restWorkingHourMockMvc.perform(get(ENTITY_API_URL + "?sort=id,desc"))
             .andExpect(status().isOk())
             .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
             .andExpect(jsonPath("$.[*].id").value(hasItem(this.workingHour.getId().intValue())))
@@ -198,8 +228,7 @@ class WorkingHourResourceIT {
         this.workingHourRepository.saveAndFlush(this.workingHour);
 
         // Get the workingHour
-        this.restWorkingHourMockMvc
-            .perform(get(ENTITY_API_URL_ID, this.workingHour.getId()))
+        this.restWorkingHourMockMvc.perform(get(ENTITY_API_URL_ID, this.workingHour.getId()))
             .andExpect(status().isOk())
             .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
             .andExpect(jsonPath("$.id").value(this.workingHour.getId().intValue()))
@@ -229,13 +258,8 @@ class WorkingHourResourceIT {
         updatedWorkingHour.startAt(UPDATED_START_AT).endAt(UPDATED_END_AT);
         WorkingHourDTO workingHourDTO = this.workingHourMapper.toDto(updatedWorkingHour);
 
-        this.restWorkingHourMockMvc
-            .perform(
-                put(ENTITY_API_URL_ID, workingHourDTO.getId())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(TestUtil.convertObjectToJsonBytes(workingHourDTO))
-            )
-            .andExpect(status().isOk());
+        this.restWorkingHourMockMvc.perform(put(ENTITY_API_URL_ID, workingHourDTO.getId()).contentType(MediaType.APPLICATION_JSON)
+            .content(TestUtil.convertObjectToJsonBytes(workingHourDTO))).andExpect(status().isOk());
 
         // Validate the WorkingHour in the database
         List<WorkingHour> workingHourList = this.workingHourRepository.findAll();
@@ -243,6 +267,21 @@ class WorkingHourResourceIT {
         WorkingHour testWorkingHour = workingHourList.get(workingHourList.size() - 1);
         assertThat(testWorkingHour.getStartAt()).isEqualTo(UPDATED_START_AT);
         assertThat(testWorkingHour.getEndAt()).isEqualTo(UPDATED_END_AT);
+
+
+        ConsumerRecord<String, Object> message = this.records.poll(500, TimeUnit.MILLISECONDS);
+        assertThat(message).isNotNull();
+        assertThat(message.value()).isNotNull();
+
+        TypeReference<ApnmtEvent<WorkingHourEventDTO>> eventType = new TypeReference<>() {
+        };
+        ApnmtEvent<WorkingHourEventDTO> eventResult = this.objectMapper.readValue(message.value().toString(), eventType);
+        assertThat(eventResult.getType()).isEqualTo(ApnmtEventType.workingHourCreated);
+        WorkingHourEventDTO workingHourEventDTO = eventResult.getValue();
+        assertThat(workingHourEventDTO.getId()).isEqualTo(testWorkingHour.getId());
+        assertThat(workingHourEventDTO.getEmployeeId()).isEqualTo(testWorkingHour.getEmployee().getId());
+        assertThat(workingHourEventDTO.getStartAt()).isEqualTo(testWorkingHour.getStartAt());
+        assertThat(workingHourEventDTO.getEndAt()).isEqualTo(testWorkingHour.getEndAt());
     }
 
     @Test
@@ -255,13 +294,8 @@ class WorkingHourResourceIT {
         WorkingHourDTO workingHourDTO = this.workingHourMapper.toDto(this.workingHour);
 
         // If the entity doesn't have an ID, it will throw BadRequestAlertException
-        this.restWorkingHourMockMvc
-            .perform(
-                put(ENTITY_API_URL_ID, workingHourDTO.getId())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(TestUtil.convertObjectToJsonBytes(workingHourDTO))
-            )
-            .andExpect(status().isBadRequest());
+        this.restWorkingHourMockMvc.perform(put(ENTITY_API_URL_ID, workingHourDTO.getId()).contentType(MediaType.APPLICATION_JSON)
+            .content(TestUtil.convertObjectToJsonBytes(workingHourDTO))).andExpect(status().isBadRequest());
 
         // Validate the WorkingHour in the database
         List<WorkingHour> workingHourList = this.workingHourRepository.findAll();
@@ -278,13 +312,8 @@ class WorkingHourResourceIT {
         WorkingHourDTO workingHourDTO = this.workingHourMapper.toDto(this.workingHour);
 
         // If url ID doesn't match entity ID, it will throw BadRequestAlertException
-        this.restWorkingHourMockMvc
-            .perform(
-                put(ENTITY_API_URL_ID, count.incrementAndGet())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(TestUtil.convertObjectToJsonBytes(workingHourDTO))
-            )
-            .andExpect(status().isBadRequest());
+        this.restWorkingHourMockMvc.perform(put(ENTITY_API_URL_ID, count.incrementAndGet()).contentType(MediaType.APPLICATION_JSON)
+            .content(TestUtil.convertObjectToJsonBytes(workingHourDTO))).andExpect(status().isBadRequest());
 
         // Validate the WorkingHour in the database
         List<WorkingHour> workingHourList = this.workingHourRepository.findAll();
@@ -301,8 +330,7 @@ class WorkingHourResourceIT {
         WorkingHourDTO workingHourDTO = this.workingHourMapper.toDto(this.workingHour);
 
         // If url ID doesn't match entity ID, it will throw BadRequestAlertException
-        this.restWorkingHourMockMvc
-            .perform(put(ENTITY_API_URL).contentType(MediaType.APPLICATION_JSON).content(TestUtil.convertObjectToJsonBytes(workingHourDTO)))
+        this.restWorkingHourMockMvc.perform(put(ENTITY_API_URL).contentType(MediaType.APPLICATION_JSON).content(TestUtil.convertObjectToJsonBytes(workingHourDTO)))
             .andExpect(status().isMethodNotAllowed());
 
         // Validate the WorkingHour in the database
@@ -324,13 +352,8 @@ class WorkingHourResourceIT {
 
         partialUpdatedWorkingHour.endAt(UPDATED_END_AT);
 
-        this.restWorkingHourMockMvc
-            .perform(
-                patch(ENTITY_API_URL_ID, partialUpdatedWorkingHour.getId())
-                    .contentType("application/merge-patch+json")
-                    .content(TestUtil.convertObjectToJsonBytes(partialUpdatedWorkingHour))
-            )
-            .andExpect(status().isOk());
+        this.restWorkingHourMockMvc.perform(patch(ENTITY_API_URL_ID, partialUpdatedWorkingHour.getId()).contentType("application/merge-patch+json")
+            .content(TestUtil.convertObjectToJsonBytes(partialUpdatedWorkingHour))).andExpect(status().isOk());
 
         // Validate the WorkingHour in the database
         List<WorkingHour> workingHourList = this.workingHourRepository.findAll();
@@ -338,6 +361,21 @@ class WorkingHourResourceIT {
         WorkingHour testWorkingHour = workingHourList.get(workingHourList.size() - 1);
         assertThat(testWorkingHour.getStartAt()).isEqualTo(DEFAULT_START_AT);
         assertThat(testWorkingHour.getEndAt()).isEqualTo(UPDATED_END_AT);
+
+
+        ConsumerRecord<String, Object> message = this.records.poll(500, TimeUnit.MILLISECONDS);
+        assertThat(message).isNotNull();
+        assertThat(message.value()).isNotNull();
+
+        TypeReference<ApnmtEvent<WorkingHourEventDTO>> eventType = new TypeReference<>() {
+        };
+        ApnmtEvent<WorkingHourEventDTO> eventResult = this.objectMapper.readValue(message.value().toString(), eventType);
+        assertThat(eventResult.getType()).isEqualTo(ApnmtEventType.workingHourCreated);
+        WorkingHourEventDTO workingHourEventDTO = eventResult.getValue();
+        assertThat(workingHourEventDTO.getId()).isEqualTo(testWorkingHour.getId());
+        assertThat(workingHourEventDTO.getEmployeeId()).isEqualTo(testWorkingHour.getEmployee().getId());
+        assertThat(workingHourEventDTO.getStartAt()).isEqualTo(testWorkingHour.getStartAt());
+        assertThat(workingHourEventDTO.getEndAt()).isEqualTo(testWorkingHour.getEndAt());
     }
 
     @Test
@@ -354,13 +392,8 @@ class WorkingHourResourceIT {
 
         partialUpdatedWorkingHour.startAt(UPDATED_START_AT).endAt(UPDATED_END_AT);
 
-        this.restWorkingHourMockMvc
-            .perform(
-                patch(ENTITY_API_URL_ID, partialUpdatedWorkingHour.getId())
-                    .contentType("application/merge-patch+json")
-                    .content(TestUtil.convertObjectToJsonBytes(partialUpdatedWorkingHour))
-            )
-            .andExpect(status().isOk());
+        this.restWorkingHourMockMvc.perform(patch(ENTITY_API_URL_ID, partialUpdatedWorkingHour.getId()).contentType("application/merge-patch+json")
+            .content(TestUtil.convertObjectToJsonBytes(partialUpdatedWorkingHour))).andExpect(status().isOk());
 
         // Validate the WorkingHour in the database
         List<WorkingHour> workingHourList = this.workingHourRepository.findAll();
@@ -368,6 +401,21 @@ class WorkingHourResourceIT {
         WorkingHour testWorkingHour = workingHourList.get(workingHourList.size() - 1);
         assertThat(testWorkingHour.getStartAt()).isEqualTo(UPDATED_START_AT);
         assertThat(testWorkingHour.getEndAt()).isEqualTo(UPDATED_END_AT);
+
+
+        ConsumerRecord<String, Object> message = this.records.poll(500, TimeUnit.MILLISECONDS);
+        assertThat(message).isNotNull();
+        assertThat(message.value()).isNotNull();
+
+        TypeReference<ApnmtEvent<WorkingHourEventDTO>> eventType = new TypeReference<>() {
+        };
+        ApnmtEvent<WorkingHourEventDTO> eventResult = this.objectMapper.readValue(message.value().toString(), eventType);
+        assertThat(eventResult.getType()).isEqualTo(ApnmtEventType.workingHourCreated);
+        WorkingHourEventDTO workingHourEventDTO = eventResult.getValue();
+        assertThat(workingHourEventDTO.getId()).isEqualTo(testWorkingHour.getId());
+        assertThat(workingHourEventDTO.getEmployeeId()).isEqualTo(testWorkingHour.getEmployee().getId());
+        assertThat(workingHourEventDTO.getStartAt()).isEqualTo(testWorkingHour.getStartAt());
+        assertThat(workingHourEventDTO.getEndAt()).isEqualTo(testWorkingHour.getEndAt());
     }
 
     @Test
@@ -380,13 +428,8 @@ class WorkingHourResourceIT {
         WorkingHourDTO workingHourDTO = this.workingHourMapper.toDto(this.workingHour);
 
         // If the entity doesn't have an ID, it will throw BadRequestAlertException
-        this.restWorkingHourMockMvc
-            .perform(
-                patch(ENTITY_API_URL_ID, workingHourDTO.getId())
-                    .contentType("application/merge-patch+json")
-                    .content(TestUtil.convertObjectToJsonBytes(workingHourDTO))
-            )
-            .andExpect(status().isBadRequest());
+        this.restWorkingHourMockMvc.perform(patch(ENTITY_API_URL_ID, workingHourDTO.getId()).contentType("application/merge-patch+json")
+            .content(TestUtil.convertObjectToJsonBytes(workingHourDTO))).andExpect(status().isBadRequest());
 
         // Validate the WorkingHour in the database
         List<WorkingHour> workingHourList = this.workingHourRepository.findAll();
@@ -403,13 +446,8 @@ class WorkingHourResourceIT {
         WorkingHourDTO workingHourDTO = this.workingHourMapper.toDto(this.workingHour);
 
         // If url ID doesn't match entity ID, it will throw BadRequestAlertException
-        this.restWorkingHourMockMvc
-            .perform(
-                patch(ENTITY_API_URL_ID, count.incrementAndGet())
-                    .contentType("application/merge-patch+json")
-                    .content(TestUtil.convertObjectToJsonBytes(workingHourDTO))
-            )
-            .andExpect(status().isBadRequest());
+        this.restWorkingHourMockMvc.perform(patch(ENTITY_API_URL_ID, count.incrementAndGet()).contentType("application/merge-patch+json")
+            .content(TestUtil.convertObjectToJsonBytes(workingHourDTO))).andExpect(status().isBadRequest());
 
         // Validate the WorkingHour in the database
         List<WorkingHour> workingHourList = this.workingHourRepository.findAll();
@@ -426,10 +464,7 @@ class WorkingHourResourceIT {
         WorkingHourDTO workingHourDTO = this.workingHourMapper.toDto(this.workingHour);
 
         // If url ID doesn't match entity ID, it will throw BadRequestAlertException
-        this.restWorkingHourMockMvc
-            .perform(
-                patch(ENTITY_API_URL).contentType("application/merge-patch+json").content(TestUtil.convertObjectToJsonBytes(workingHourDTO))
-            )
+        this.restWorkingHourMockMvc.perform(patch(ENTITY_API_URL).contentType("application/merge-patch+json").content(TestUtil.convertObjectToJsonBytes(workingHourDTO)))
             .andExpect(status().isMethodNotAllowed());
 
         // Validate the WorkingHour in the database
@@ -446,25 +481,25 @@ class WorkingHourResourceIT {
         int databaseSizeBeforeDelete = this.workingHourRepository.findAll().size();
 
         // Delete the workingHour
-        this.restWorkingHourMockMvc
-            .perform(delete(ENTITY_API_URL_ID, this.workingHour.getId()).accept(MediaType.APPLICATION_JSON))
-            .andExpect(status().isNoContent());
+        this.restWorkingHourMockMvc.perform(delete(ENTITY_API_URL_ID, this.workingHour.getId()).accept(MediaType.APPLICATION_JSON)).andExpect(status().isNoContent());
 
         // Validate the database contains one less item
         List<WorkingHour> workingHourList = this.workingHourRepository.findAll();
         assertThat(workingHourList).hasSize(databaseSizeBeforeDelete - 1);
-    }
 
-    @TestConfiguration
-    public static class EventSenderConfig {
-        private final Logger log = LoggerFactory.getLogger(EventSenderConfig.class);
 
-        @Bean
-        public ApnmtEventSender<WorkingHourEventDTO> sender() {
-            return (topic, event) -> {
-                this.log.info("Event send to topic {}", topic);
-            };
-        }
+        ConsumerRecord<String, Object> message = this.records.poll(500, TimeUnit.MILLISECONDS);
+        assertThat(message).isNotNull();
+        assertThat(message.value()).isNotNull();
 
+        TypeReference<ApnmtEvent<WorkingHourEventDTO>> eventType = new TypeReference<>() {
+        };
+        ApnmtEvent<WorkingHourEventDTO> eventResult = this.objectMapper.readValue(message.value().toString(), eventType);
+        assertThat(eventResult.getType()).isEqualTo(ApnmtEventType.workingHourDeleted);
+        WorkingHourEventDTO workingHourEventDTO = eventResult.getValue();
+        assertThat(workingHourEventDTO.getId()).isEqualTo(this.workingHour.getId());
+        assertThat(workingHourEventDTO.getEmployeeId()).isEqualTo(this.workingHour.getEmployee().getId());
+        assertThat(workingHourEventDTO.getStartAt()).isEqualTo(this.workingHour.getStartAt());
+        assertThat(workingHourEventDTO.getEndAt()).isEqualTo(this.workingHour.getEndAt());
     }
 }
