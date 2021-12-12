@@ -1,5 +1,7 @@
 package de.apnmt.organization.kafka;
 
+import java.util.concurrent.TimeUnit;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import de.apnmt.common.ApnmtTestUtil;
@@ -9,6 +11,7 @@ import de.apnmt.common.event.ApnmtEventType;
 import de.apnmt.common.event.value.WorkingHourEventDTO;
 import de.apnmt.k8s.common.test.AbstractEventSenderIT;
 import de.apnmt.organization.IntegrationTest;
+import de.apnmt.organization.kafka.sender.WorkingHourEventSender;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,9 +19,6 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.annotation.DirtiesContext;
-
-import java.util.concurrent.TimeUnit;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 @EnableKafka

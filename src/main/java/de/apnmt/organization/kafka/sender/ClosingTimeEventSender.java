@@ -1,4 +1,4 @@
-package de.apnmt.organization.kafka;
+package de.apnmt.organization.kafka.sender;
 
 import de.apnmt.common.event.ApnmtEvent;
 import de.apnmt.common.event.value.ClosingTimeEventDTO;
