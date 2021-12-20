@@ -21,7 +21,7 @@ public class ClosingTimeEventSender implements ApnmtEventSender<ClosingTimeEvent
 
     @Override
     public void send(String topic, ApnmtEvent<ClosingTimeEventDTO> event) {
-        log.info("Send Event {} to topic {}", event, topic);
+        log.info("Send event {} to topic {}", event, topic);
         this.kafkaTemplate.send(topic, event);
     }
 

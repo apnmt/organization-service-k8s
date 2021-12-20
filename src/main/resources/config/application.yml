@@ -133,7 +133,7 @@ spring:
     ansi:
       console-available: true
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: kafka-bootstrap-server
     consumer:
       group-id: organization-service
 
