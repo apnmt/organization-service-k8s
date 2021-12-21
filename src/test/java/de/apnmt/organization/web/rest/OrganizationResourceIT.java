@@ -257,6 +257,7 @@ class OrganizationResourceIT {
     @Transactional
     void getAllOrganizationsEmpty() throws Exception {
         // Initialize the database
+        this.organizationRepository.deleteAll();
         this.organization.setActive(false);
         this.organizationRepository.saveAndFlush(this.organization);
 
