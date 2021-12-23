@@ -136,6 +136,7 @@ spring:
     bootstrap-servers: kafka-bootstrap-server
     consumer:
       group-id: organization-service
+      auto-startup: false
 
 server:
   servlet:

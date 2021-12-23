@@ -73,6 +73,9 @@ spring:
     mode: HTML
   kafka:
     bootstrap-servers: localhost:58255
+    consumer:
+      group-id: organization-service
+      auto-startup: true
 
 server:
   port: 10344

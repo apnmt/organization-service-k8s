@@ -16,4 +16,7 @@ spec:
 properties:
     bootstrapServer:
         name: SPRING_KAFKA_BOOTSTRAPSERVERS
-        value: my-cluster-kafka-bootstrap.default.svc.cluster.local:9092
+        value: apnmt-kafka-kafka-bootstrap.apnmt.svc.cluster.local:9092
+    autoStartup:
+        name: SPRING_KAFKA_AUTOSTARTUP
+        value: false
