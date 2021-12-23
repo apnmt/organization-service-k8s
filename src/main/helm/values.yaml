@@ -19,4 +19,4 @@ properties:
         value: apnmt-kafka-kafka-bootstrap.apnmt.svc.cluster.local:9092
     autoStartup:
         name: SPRING_KAFKA_AUTOSTARTUP
-        value: 'false'
+        value: false
