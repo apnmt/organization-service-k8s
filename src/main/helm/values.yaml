@@ -15,5 +15,5 @@ spec:
 
 properties:
     bootstrapServer:
-        name: SPRING_KAFKA_BOOTSTRAP-SERVERS
+        name: SPRING_KAFKA_BOOTSTRAPSERVERS
         value: my-cluster-kafka-bootstrap.default.svc.cluster.local:9092
