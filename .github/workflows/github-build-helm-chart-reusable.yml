@@ -1,0 +1,50 @@
+name: Build Helm Chart Reusable Workflow
+on:
+  workflow_call:
+    secrets:
+      GH_PACKAGE_REPO_USERNAME:
+        required: true
+      GH_PACKAGE_REPO_PASSWORD:
+        required: true
+jobs:
+  pipeline:
+    name: Build Helm Chart
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[ci skip]') && !contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.pull_request.title, '[skip ci]') && !contains(github.event.pull_request.title, '[ci skip]')"
+    timeout-minutes: 40
+    env:
+      GITHUB_USER_REF: ${{ secrets.GH_PACKAGE_REPO_USERNAME }}
+      GITHUB_TOKEN_REF: ${{ secrets.GH_PACKAGE_REPO_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Checkout k8s-config helm chart
+        uses: actions/checkout@v2
+        with:
+          repository: apnmt/k8s-config
+          ref: postgres
+          path: k8s-config
+          token: ${{ secrets.GH_PACKAGE_REPO_PASSWORD }}
+        - name: Combine values.yml
+          run: |
+            cat src/main/helm/values.yaml >> k8s-config/charts/values.yaml
+        - name: Set Helm Chart Name
+          uses: datamonsters/replace-action@v2
+          with:
+            files: 'k8s-config/charts/Chart.yaml'
+            replacements: '^CFG:name^=organizationservice-k8s'
+        - uses: azure/setup-helm@v1
+        - name: Build Helm Chart
+          run: |
+            mkdir -p repo
+            cd repo
+            helm dependency update ../k8s-config/charts
+            helm package ../k8s-config/charts --app-version ${RELEASE_VERSION} --version ${RELEASE_VERSION}
+        - name: Push to repository
+          uses: dmnemec/copy_file_to_another_repo_action@main
+          env:
+            API_TOKEN_GITHUB: ${{ secrets.GH_PACKAGE_REPO_PASSWORD }}
+          with:
+            source_file: ./repo/.
+            destination_repo: 'apnmt/apnmt-charts'
+            user_email: 'tobias.wittmann96@web.de'
+            user_name: 'tobi5775'
