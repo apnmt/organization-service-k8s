@@ -32,6 +32,7 @@ public class OrganizationActivationKafkaEventConsumer extends OrganizationActiva
     @KafkaListener(topics = {TopicConstants.ORGANIZATION_ACTIVATION_CHANGED_TOPIC})
     public void receiveEvent(@Payload String message) {
         try {
+            log.info("Received event {} from kafka topic {}", message, TopicConstants.ORGANIZATION_ACTIVATION_CHANGED_TOPIC);
             ApnmtEvent<OrganizationActivationEventDTO> event = this.objectMapper.readValue(message, EVENT_TYPE);
             super.receiveEvent(event);
         } catch (JsonProcessingException e) {

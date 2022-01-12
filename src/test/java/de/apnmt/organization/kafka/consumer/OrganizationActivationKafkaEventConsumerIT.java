@@ -1,4 +1,4 @@
-package de.apnmt.organization.kafka;
+package de.apnmt.organization.kafka.consumer;
 
 import java.util.List;
 import java.util.Optional;

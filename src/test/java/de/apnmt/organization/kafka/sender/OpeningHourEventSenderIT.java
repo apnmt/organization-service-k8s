@@ -1,4 +1,4 @@
-package de.apnmt.organization.kafka;
+package de.apnmt.organization.kafka.sender;
 
 import java.util.concurrent.TimeUnit;
 
@@ -8,10 +8,9 @@ import de.apnmt.common.ApnmtTestUtil;
 import de.apnmt.common.TopicConstants;
 import de.apnmt.common.event.ApnmtEvent;
 import de.apnmt.common.event.ApnmtEventType;
-import de.apnmt.common.event.value.ClosingTimeEventDTO;
+import de.apnmt.common.event.value.OpeningHourEventDTO;
 import de.apnmt.k8s.common.test.AbstractEventSenderIT;
 import de.apnmt.organization.IntegrationTest;
-import de.apnmt.organization.kafka.sender.ClosingTimeEventSender;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,32 +21,32 @@ import org.springframework.test.annotation.DirtiesContext;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @EnableKafka
-@EmbeddedKafka(ports = {58255}, topics = {TopicConstants.CLOSING_TIME_CHANGED_TOPIC})
+@EmbeddedKafka(ports = {58255}, topics = {TopicConstants.OPENING_HOUR_CHANGED_TOPIC})
 @IntegrationTest
 @AutoConfigureMockMvc
 @DirtiesContext
-public class ClosingTimeEventSenderIT extends AbstractEventSenderIT {
+public class OpeningHourEventSenderIT extends AbstractEventSenderIT {
 
     @Autowired
-    private ClosingTimeEventSender closingTimeEventSender;
+    private OpeningHourEventSender openingHourEventSender;
 
     @Override
     public String getTopic() {
-        return TopicConstants.CLOSING_TIME_CHANGED_TOPIC;
+        return TopicConstants.OPENING_HOUR_CHANGED_TOPIC;
     }
 
     @Test
-    public void closingTimeEventSenderTest() throws InterruptedException, JsonProcessingException {
-        ApnmtEvent<ClosingTimeEventDTO> event = ApnmtTestUtil.createClosingTimeEvent(ApnmtEventType.closingTimeCreated);
-        this.closingTimeEventSender.send(TopicConstants.CLOSING_TIME_CHANGED_TOPIC, event);
+    public void openingHourEventSenderTest() throws InterruptedException, JsonProcessingException {
+        ApnmtEvent<OpeningHourEventDTO> event = ApnmtTestUtil.createOpeningHourEvent(ApnmtEventType.openingHourCreated);
+        this.openingHourEventSender.send(TopicConstants.OPENING_HOUR_CHANGED_TOPIC, event);
 
         ConsumerRecord<String, Object> message = this.records.poll(500, TimeUnit.MILLISECONDS);
         assertThat(message).isNotNull();
         assertThat(message.value()).isNotNull();
 
-        TypeReference<ApnmtEvent<ClosingTimeEventDTO>> eventType = new TypeReference<>() {
+        TypeReference<ApnmtEvent<OpeningHourEventDTO>> eventType = new TypeReference<>() {
         };
-        ApnmtEvent<ClosingTimeEventDTO> eventResult = this.objectMapper.readValue(message.value().toString(), eventType);
+        ApnmtEvent<OpeningHourEventDTO> eventResult = this.objectMapper.readValue(message.value().toString(), eventType);
         assertThat(eventResult).isEqualTo(event);
     }
 
