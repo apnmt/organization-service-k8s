@@ -3,7 +3,7 @@
 replicaCount: 1
 
 image:
-    tag: organizationservice
+    tag: organizationservice-k8s
     pullPolicy: Always
 
 emissary:
