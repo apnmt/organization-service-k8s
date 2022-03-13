@@ -43,7 +43,7 @@ class OrganizationActivationKafkaEventConsumerIT extends AbstractKafkaConsumerIT
 
     @Test
     void organizationActivationTest() throws InterruptedException {
-        Organization organization = new Organization().name("Test").mail("test@test.de").phone("12345678").ownerId(1L).active(false);
+        Organization organization = new Organization().name("Test").mail("test@test.de").phone("12345678").owner("user_1").active(false);
         this.organizationRepository.saveAndFlush(organization);
 
         int databaseSizeBeforeCreate = this.organizationRepository.findAll().size();
@@ -62,7 +62,7 @@ class OrganizationActivationKafkaEventConsumerIT extends AbstractKafkaConsumerIT
 
     @Test
     void organizationDeactivationTest() throws InterruptedException {
-        Organization organization = new Organization().name("Test").mail("test@test.de").phone("12345678").ownerId(1L).active(true);
+        Organization organization = new Organization().name("Test").mail("test@test.de").phone("12345678").owner("user_1").active(true);
         this.organizationRepository.saveAndFlush(organization);
 
         int databaseSizeBeforeCreate = this.organizationRepository.findAll().size();

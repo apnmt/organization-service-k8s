@@ -46,8 +46,8 @@ class OrganizationResourceIT {
     private static final String DEFAULT_PHONE = "AAAAAAAAAA";
     private static final String UPDATED_PHONE = "BBBBBBBBBB";
 
-    private static final Long DEFAULT_OWNER_ID = 1L;
-    private static final Long UPDATED_OWNER_ID = 2L;
+    private static final String DEFAULT_OWNER = "user_1";
+    private static final String UPDATED_OWNER = "user_2";
 
     private static final Boolean DEFAULT_ACTIVE = true;
     private static final Boolean UPDATED_ACTIVE = false;
@@ -82,7 +82,7 @@ class OrganizationResourceIT {
         Organization organization = new Organization().name(DEFAULT_NAME)
             .mail(DEFAULT_MAIL)
             .phone(DEFAULT_PHONE)
-            .ownerId(DEFAULT_OWNER_ID)
+            .owner(DEFAULT_OWNER)
             .active(DEFAULT_ACTIVE)
             .addresse(new Addresse().line1("Teststraße 1")
                 .city("Test")
@@ -114,7 +114,7 @@ class OrganizationResourceIT {
         assertThat(testOrganization.getName()).isEqualTo(DEFAULT_NAME);
         assertThat(testOrganization.getMail()).isEqualTo(DEFAULT_MAIL);
         assertThat(testOrganization.getPhone()).isEqualTo(DEFAULT_PHONE);
-        assertThat(testOrganization.getOwnerId()).isEqualTo(DEFAULT_OWNER_ID);
+        assertThat(testOrganization.getOwner()).isEqualTo(DEFAULT_OWNER);
         assertThat(testOrganization.getActive()).isEqualTo(false);
     }
 
@@ -197,11 +197,11 @@ class OrganizationResourceIT {
 
     @Test
     @Transactional
-    void checkOwnerIdIsRequired() throws Exception {
+    void checkOwnerIsRequired() throws Exception {
         int databaseSizeBeforeTest = this.organizationRepository.findAll()
             .size();
         // set the field null
-        this.organization.setOwnerId(null);
+        this.organization.setOwner(null);
 
         // Create the Organization, which fails.
         OrganizationDTO organizationDTO = this.organizationMapper.toDto(this.organization);
@@ -249,7 +249,7 @@ class OrganizationResourceIT {
             .andExpect(jsonPath("$.[*].name").value(hasItem(DEFAULT_NAME)))
             .andExpect(jsonPath("$.[*].mail").value(hasItem(DEFAULT_MAIL)))
             .andExpect(jsonPath("$.[*].phone").value(hasItem(DEFAULT_PHONE)))
-            .andExpect(jsonPath("$.[*].ownerId").value(hasItem(DEFAULT_OWNER_ID.intValue())))
+            .andExpect(jsonPath("$.[*].owner").value(hasItem(DEFAULT_OWNER)))
             .andExpect(jsonPath("$.[*].active").value(hasItem(true)));
     }
 
@@ -283,7 +283,7 @@ class OrganizationResourceIT {
             .andExpect(jsonPath("$.name").value(DEFAULT_NAME))
             .andExpect(jsonPath("$.mail").value(DEFAULT_MAIL))
             .andExpect(jsonPath("$.phone").value(DEFAULT_PHONE))
-            .andExpect(jsonPath("$.ownerId").value(DEFAULT_OWNER_ID.toString()))
+            .andExpect(jsonPath("$.owner").value(DEFAULT_OWNER.toString()))
             .andExpect(jsonPath("$.active").value(DEFAULT_ACTIVE.booleanValue()));
     }
 
@@ -312,7 +312,7 @@ class OrganizationResourceIT {
         updatedOrganization.name(UPDATED_NAME)
             .mail(UPDATED_MAIL)
             .phone(UPDATED_PHONE)
-            .ownerId(UPDATED_OWNER_ID)
+            .owner(UPDATED_OWNER)
             .active(UPDATED_ACTIVE);
         OrganizationDTO organizationDTO = this.organizationMapper.toDto(updatedOrganization);
 
@@ -327,7 +327,7 @@ class OrganizationResourceIT {
         assertThat(testOrganization.getName()).isEqualTo(UPDATED_NAME);
         assertThat(testOrganization.getMail()).isEqualTo(UPDATED_MAIL);
         assertThat(testOrganization.getPhone()).isEqualTo(UPDATED_PHONE);
-        assertThat(testOrganization.getOwnerId()).isEqualTo(UPDATED_OWNER_ID);
+        assertThat(testOrganization.getOwner()).isEqualTo(UPDATED_OWNER);
         assertThat(testOrganization.getActive()).isEqualTo(UPDATED_ACTIVE);
     }
 
@@ -405,7 +405,7 @@ class OrganizationResourceIT {
         partialUpdatedOrganization.setId(this.organization.getId());
 
         partialUpdatedOrganization.name(UPDATED_NAME)
-            .ownerId(UPDATED_OWNER_ID)
+            .owner(UPDATED_OWNER)
             .active(UPDATED_ACTIVE);
 
         this.restOrganizationMockMvc.perform(patch(ENTITY_API_URL_ID, partialUpdatedOrganization.getId()).contentType("application/merge-patch+json")
@@ -419,7 +419,7 @@ class OrganizationResourceIT {
         assertThat(testOrganization.getName()).isEqualTo(UPDATED_NAME);
         assertThat(testOrganization.getMail()).isEqualTo(DEFAULT_MAIL);
         assertThat(testOrganization.getPhone()).isEqualTo(DEFAULT_PHONE);
-        assertThat(testOrganization.getOwnerId()).isEqualTo(UPDATED_OWNER_ID);
+        assertThat(testOrganization.getOwner()).isEqualTo(UPDATED_OWNER);
         assertThat(testOrganization.getActive()).isEqualTo(UPDATED_ACTIVE);
     }
 
@@ -439,7 +439,7 @@ class OrganizationResourceIT {
         partialUpdatedOrganization.name(UPDATED_NAME)
             .mail(UPDATED_MAIL)
             .phone(UPDATED_PHONE)
-            .ownerId(UPDATED_OWNER_ID)
+            .owner(UPDATED_OWNER)
             .active(UPDATED_ACTIVE);
 
         this.restOrganizationMockMvc.perform(patch(ENTITY_API_URL_ID, partialUpdatedOrganization.getId()).contentType("application/merge-patch+json")
@@ -453,7 +453,7 @@ class OrganizationResourceIT {
         assertThat(testOrganization.getName()).isEqualTo(UPDATED_NAME);
         assertThat(testOrganization.getMail()).isEqualTo(UPDATED_MAIL);
         assertThat(testOrganization.getPhone()).isEqualTo(UPDATED_PHONE);
-        assertThat(testOrganization.getOwnerId()).isEqualTo(UPDATED_OWNER_ID);
+        assertThat(testOrganization.getOwner()).isEqualTo(UPDATED_OWNER);
         assertThat(testOrganization.getActive()).isEqualTo(UPDATED_ACTIVE);
     }
 
