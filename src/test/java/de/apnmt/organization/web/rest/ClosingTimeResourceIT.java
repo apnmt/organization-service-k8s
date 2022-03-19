@@ -35,6 +35,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -216,6 +217,26 @@ class ClosingTimeResourceIT extends AbstractEventSenderIT {
         this.restClosingTimeMockMvc.perform(get(ENTITY_API_URL + "?sort=id,desc"))
             .andExpect(status().isOk())
             .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
+            .andExpect(jsonPath("$.[*].id").value(hasItem(this.closingTime.getId().intValue())))
+            .andExpect(jsonPath("$.[*].startAt").value(hasItem(DEFAULT_START_AT.toString())))
+            .andExpect(jsonPath("$.[*].endAt").value(hasItem(DEFAULT_END_AT.toString())));
+    }
+
+    @Test
+    @Transactional
+    void getAllClosingTimesForOrganization() throws Exception {
+        // Initialize the database
+        Organization organization = OrganizationResourceIT.createEntity(em);
+        this.organizationRepository.saveAndFlush(organization);
+        this.closingTime.organization(organization);
+        this.closingTimeRepository.saveAndFlush(this.closingTime);
+
+        // Get all the employeeList
+        this.restClosingTimeMockMvc
+            .perform(get(ENTITY_API_URL + "/organization/" + closingTime.getOrganization().getId().intValue() + "?sort=id,desc"))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
+            .andExpect(jsonPath("$.[*]").value(hasSize(1)))
             .andExpect(jsonPath("$.[*].id").value(hasItem(this.closingTime.getId().intValue())))
             .andExpect(jsonPath("$.[*].startAt").value(hasItem(DEFAULT_START_AT.toString())))
             .andExpect(jsonPath("$.[*].endAt").value(hasItem(DEFAULT_END_AT.toString())));

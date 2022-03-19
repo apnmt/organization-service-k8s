@@ -76,6 +76,9 @@ spring:
     consumer:
       group-id: organization-service
       auto-startup: true
+  zipkin:
+    base-url: http://localhost:9411
+    enabled: false
 
 server:
   port: 10344

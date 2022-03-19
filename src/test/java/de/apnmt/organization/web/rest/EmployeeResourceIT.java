@@ -2,7 +2,9 @@ package de.apnmt.organization.web.rest;
 
 import de.apnmt.organization.IntegrationTest;
 import de.apnmt.organization.common.domain.Employee;
+import de.apnmt.organization.common.domain.Organization;
 import de.apnmt.organization.common.repository.EmployeeRepository;
+import de.apnmt.organization.common.repository.OrganizationRepository;
 import de.apnmt.organization.common.service.dto.EmployeeDTO;
 import de.apnmt.organization.common.service.mapper.EmployeeMapper;
 import de.apnmt.organization.common.web.rest.EmployeeResource;
@@ -21,6 +23,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -51,6 +54,9 @@ class EmployeeResourceIT {
 
     @Autowired
     private EmployeeRepository employeeRepository;
+
+    @Autowired
+    private OrganizationRepository organizationRepository;
 
     @Autowired
     private EmployeeMapper employeeMapper;
@@ -220,6 +226,28 @@ class EmployeeResourceIT {
             .perform(get(ENTITY_API_URL + "?sort=id,desc"))
             .andExpect(status().isOk())
             .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
+            .andExpect(jsonPath("$.[*].id").value(hasItem(this.employee.getId().intValue())))
+            .andExpect(jsonPath("$.[*].firstName").value(hasItem(DEFAULT_FIRST_NAME)))
+            .andExpect(jsonPath("$.[*].lastName").value(hasItem(DEFAULT_LAST_NAME)))
+            .andExpect(jsonPath("$.[*].mail").value(hasItem(DEFAULT_MAIL)))
+            .andExpect(jsonPath("$.[*].phone").value(hasItem(DEFAULT_PHONE)));
+    }
+
+    @Test
+    @Transactional
+    void getAllEmployeesForOrganization() throws Exception {
+        // Initialize the database
+        Organization organization = OrganizationResourceIT.createEntity(em);
+        this.organizationRepository.saveAndFlush(organization);
+        this.employee.organization(organization);
+        this.employeeRepository.saveAndFlush(this.employee);
+
+        // Get all the employeeList
+        this.restEmployeeMockMvc
+            .perform(get(ENTITY_API_URL + "/organization/" + employee.getOrganization().getId().intValue() + "?sort=id,desc"))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
+            .andExpect(jsonPath("$.[*]").value(hasSize(1)))
             .andExpect(jsonPath("$.[*].id").value(hasItem(this.employee.getId().intValue())))
             .andExpect(jsonPath("$.[*].firstName").value(hasItem(DEFAULT_FIRST_NAME)))
             .andExpect(jsonPath("$.[*].lastName").value(hasItem(DEFAULT_LAST_NAME)))

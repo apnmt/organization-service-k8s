@@ -36,6 +36,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -221,6 +222,27 @@ class OpeningHourResourceIT extends AbstractEventSenderIT {
         this.restOpeningHourMockMvc.perform(get(ENTITY_API_URL + "?sort=id,desc"))
             .andExpect(status().isOk())
             .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
+            .andExpect(jsonPath("$.[*].id").value(hasItem(this.openingHour.getId().intValue())))
+            .andExpect(jsonPath("$.[*].day").value(hasItem(DEFAULT_DAY.toString())))
+            .andExpect(jsonPath("$.[*].startTime").value(hasItem(DEFAULT_START_TIME.toString())))
+            .andExpect(jsonPath("$.[*].endTime").value(hasItem(DEFAULT_END_TIME.toString())));
+    }
+
+    @Test
+    @Transactional
+    void getAllOpeningHourForOrganization() throws Exception {
+        // Initialize the database
+        Organization organization = OrganizationResourceIT.createEntity(em);
+        this.organizationRepository.saveAndFlush(organization);
+        this.openingHour.organization(organization);
+        this.openingHourRepository.saveAndFlush(this.openingHour);
+
+        // Get all the employeeList
+        this.restOpeningHourMockMvc
+            .perform(get(ENTITY_API_URL + "/organization/" + openingHour.getOrganization().getId().intValue() + "?sort=id,desc"))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
+            .andExpect(jsonPath("$.[*]").value(hasSize(1)))
             .andExpect(jsonPath("$.[*].id").value(hasItem(this.openingHour.getId().intValue())))
             .andExpect(jsonPath("$.[*].day").value(hasItem(DEFAULT_DAY.toString())))
             .andExpect(jsonPath("$.[*].startTime").value(hasItem(DEFAULT_START_TIME.toString())))
