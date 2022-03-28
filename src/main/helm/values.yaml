@@ -35,3 +35,6 @@ properties:
     loggingLogstashHost:
         name: JHIPSTER_LOGGING_LOGSTASH_HOST
         value: apnmt-elk-logstash.apnmt.svc.cluster.local
+    liquibaseFaker:
+        name: SPRING_LIQUIBASE_CONTEXTS
+        value: prod, faker
