@@ -110,7 +110,7 @@
         <dependency>
             <groupId>de.apnmt.organization</groupId>
             <artifactId>organization-service-common</artifactId>
-            <version>0.0.3-SNAPSHOT</version>
+            <version>0.0.4-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>de.apnmt.k8s.common</groupId>
