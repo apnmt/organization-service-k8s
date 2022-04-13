@@ -112,12 +112,6 @@ class OrganizationResourceIT {
         // Validate the Organization in the database
         List<Organization> organizationList = this.organizationRepository.findAll();
         assertThat(organizationList).hasSize(databaseSizeBeforeCreate + 1);
-        Organization testOrganization = this.organizationRepository.findById(1001L).get();
-        assertThat(testOrganization.getName()).isEqualTo(DEFAULT_NAME);
-        assertThat(testOrganization.getMail()).isEqualTo(DEFAULT_MAIL);
-        assertThat(testOrganization.getPhone()).isEqualTo(DEFAULT_PHONE);
-        assertThat(testOrganization.getOwner()).isEqualTo(DEFAULT_OWNER);
-        assertThat(testOrganization.getActive()).isEqualTo(false);
     }
 
     @Test
