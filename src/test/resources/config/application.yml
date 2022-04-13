@@ -51,7 +51,7 @@ spring:
       hibernate.jdbc.time_zone: UTC
       hibernate.query.fail_on_pagination_over_collection_fetch: true
   liquibase:
-    contexts: test
+    contexts: test, faker
   mail:
     host: localhost
   main:

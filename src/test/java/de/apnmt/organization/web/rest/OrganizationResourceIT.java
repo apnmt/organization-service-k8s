@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import javax.persistence.EntityManager;
 import de.apnmt.organization.IntegrationTest;
 import de.apnmt.organization.common.domain.Addresse;
+import de.apnmt.organization.common.domain.OpeningHour;
 import de.apnmt.organization.common.domain.Organization;
 import de.apnmt.organization.common.repository.OrganizationRepository;
 import de.apnmt.organization.common.service.dto.OrganizationDTO;
@@ -251,21 +252,6 @@ class OrganizationResourceIT {
             .andExpect(jsonPath("$.[*].phone").value(hasItem(DEFAULT_PHONE)))
             .andExpect(jsonPath("$.[*].owner").value(hasItem(DEFAULT_OWNER)))
             .andExpect(jsonPath("$.[*].active").value(hasItem(true)));
-    }
-
-    @Test
-    @Transactional
-    void getAllOrganizationsEmpty() throws Exception {
-        // Initialize the database
-        this.organizationRepository.deleteAll();
-        this.organization.setActive(false);
-        this.organizationRepository.saveAndFlush(this.organization);
-
-        // Get all the organizationList
-        this.restOrganizationMockMvc.perform(get(ENTITY_API_URL + "?sort=id,desc"))
-            .andExpect(status().isOk())
-            .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
-            .andExpect(jsonPath("$.[*]").isEmpty());
     }
 
     @Test
@@ -534,4 +520,21 @@ class OrganizationResourceIT {
         List<Organization> organizationList = this.organizationRepository.findAll();
         assertThat(organizationList).hasSize(databaseSizeBeforeDelete - 1);
     }
+
+    @Test
+    @Transactional
+    void deleteAllOrganizations() throws Exception {
+        // Initialize the database
+        this.organizationRepository.saveAndFlush(this.organization);
+
+        int databaseSizeBeforeDelete = this.organizationRepository.findAll().size();
+
+        // Delete the appointment
+        this.restOrganizationMockMvc.perform(delete(ENTITY_API_URL).accept(MediaType.APPLICATION_JSON)).andExpect(status().isNoContent());
+
+        // Validate the database contains no more item
+        List<Organization> list = this.organizationRepository.findAll();
+        assertThat(list).hasSize(databaseSizeBeforeDelete - 1);
+    }
+
 }

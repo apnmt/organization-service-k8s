@@ -1,6 +1,7 @@
 package de.apnmt.organization.web.rest;
 
 import de.apnmt.organization.IntegrationTest;
+import de.apnmt.organization.common.domain.ClosingTime;
 import de.apnmt.organization.common.domain.Employee;
 import de.apnmt.organization.common.domain.Organization;
 import de.apnmt.organization.common.repository.EmployeeRepository;
@@ -525,5 +526,21 @@ class EmployeeResourceIT {
         // Validate the database contains one less item
         List<Employee> employeeList = this.employeeRepository.findAll();
         assertThat(employeeList).hasSize(databaseSizeBeforeDelete - 1);
+    }
+
+    @Test
+    @Transactional
+    void deleteAllEmployees() throws Exception {
+        // Initialize the database
+        this.employeeRepository.saveAndFlush(this.employee);
+
+        int databaseSizeBeforeDelete = this.employeeRepository.findAll().size();
+
+        // Delete the appointment
+        this.restEmployeeMockMvc.perform(delete(ENTITY_API_URL).accept(MediaType.APPLICATION_JSON)).andExpect(status().isNoContent());
+
+        // Validate the database contains no more item
+        List<Employee> list = this.employeeRepository.findAll();
+        assertThat(list).hasSize(databaseSizeBeforeDelete - 1);
     }
 }

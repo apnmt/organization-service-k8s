@@ -16,6 +16,7 @@ import de.apnmt.common.event.value.WorkingHourEventDTO;
 import de.apnmt.k8s.common.test.AbstractEventSenderIT;
 import de.apnmt.organization.IntegrationTest;
 import de.apnmt.organization.common.domain.Employee;
+import de.apnmt.organization.common.domain.OpeningHour;
 import de.apnmt.organization.common.domain.WorkingHour;
 import de.apnmt.organization.common.repository.EmployeeRepository;
 import de.apnmt.organization.common.repository.WorkingHourRepository;
@@ -501,5 +502,21 @@ class WorkingHourResourceIT extends AbstractEventSenderIT {
         assertThat(workingHourEventDTO.getEmployeeId()).isEqualTo(this.workingHour.getEmployee().getId());
         assertThat(workingHourEventDTO.getStartAt()).isEqualTo(this.workingHour.getStartAt());
         assertThat(workingHourEventDTO.getEndAt()).isEqualTo(this.workingHour.getEndAt());
+    }
+
+    @Test
+    @Transactional
+    void deleteAllWorkingHozurs() throws Exception {
+        // Initialize the database
+        this.workingHourRepository.saveAndFlush(this.workingHour);
+
+        int databaseSizeBeforeDelete = this.workingHourRepository.findAll().size();
+
+        // Delete the appointment
+        this.restWorkingHourMockMvc.perform(delete(ENTITY_API_URL).accept(MediaType.APPLICATION_JSON)).andExpect(status().isNoContent());
+
+        // Validate the database contains no more item
+        List<WorkingHour> list = this.workingHourRepository.findAll();
+        assertThat(list).hasSize(databaseSizeBeforeDelete - 1);
     }
 }

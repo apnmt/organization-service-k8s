@@ -517,4 +517,20 @@ class ClosingTimeResourceIT extends AbstractEventSenderIT {
         assertThat(closingTimeEventDTO.getStartAt()).isEqualTo(this.closingTime.getStartAt());
         assertThat(closingTimeEventDTO.getEndAt()).isEqualTo(this.closingTime.getEndAt());
     }
+
+    @Test
+    @Transactional
+    void deleteAllClosingTimes() throws Exception {
+        // Initialize the database
+        this.closingTimeRepository.saveAndFlush(this.closingTime);
+
+        int databaseSizeBeforeDelete = this.closingTimeRepository.findAll().size();
+
+        // Delete the appointment
+        this.restClosingTimeMockMvc.perform(delete(ENTITY_API_URL).accept(MediaType.APPLICATION_JSON)).andExpect(status().isNoContent());
+
+        // Validate the database contains no more item
+        List<ClosingTime> list = this.closingTimeRepository.findAll();
+        assertThat(list).hasSize(databaseSizeBeforeDelete - 1);
+    }
 }

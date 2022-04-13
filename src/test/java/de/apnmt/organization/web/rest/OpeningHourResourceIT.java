@@ -16,6 +16,7 @@ import de.apnmt.common.event.ApnmtEventType;
 import de.apnmt.common.event.value.OpeningHourEventDTO;
 import de.apnmt.k8s.common.test.AbstractEventSenderIT;
 import de.apnmt.organization.IntegrationTest;
+import de.apnmt.organization.common.domain.ClosingTime;
 import de.apnmt.organization.common.domain.OpeningHour;
 import de.apnmt.organization.common.domain.Organization;
 import de.apnmt.organization.common.repository.OpeningHourRepository;
@@ -532,5 +533,21 @@ class OpeningHourResourceIT extends AbstractEventSenderIT {
         assertThat(openingHourEventDTO.getOrganizationId()).isEqualTo(this.openingHour.getOrganization().getId());
         assertThat(openingHourEventDTO.getStartTime()).isEqualTo(this.openingHour.getStartTime());
         assertThat(openingHourEventDTO.getEndTime()).isEqualTo(this.openingHour.getEndTime());
+    }
+
+    @Test
+    @Transactional
+    void deleteAllOpeningHours() throws Exception {
+        // Initialize the database
+        this.openingHourRepository.saveAndFlush(this.openingHour);
+
+        int databaseSizeBeforeDelete = this.openingHourRepository.findAll().size();
+
+        // Delete the appointment
+        this.restOpeningHourMockMvc.perform(delete(ENTITY_API_URL).accept(MediaType.APPLICATION_JSON)).andExpect(status().isNoContent());
+
+        // Validate the database contains no more item
+        List<OpeningHour> list = this.openingHourRepository.findAll();
+        assertThat(list).hasSize(databaseSizeBeforeDelete - 1);
     }
 }
