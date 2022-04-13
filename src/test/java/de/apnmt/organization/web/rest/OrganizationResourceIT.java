@@ -1,6 +1,7 @@
 package de.apnmt.organization.web.rest;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -111,7 +112,7 @@ class OrganizationResourceIT {
         // Validate the Organization in the database
         List<Organization> organizationList = this.organizationRepository.findAll();
         assertThat(organizationList).hasSize(databaseSizeBeforeCreate + 1);
-        Organization testOrganization = organizationList.get(organizationList.size() - 1);
+        Organization testOrganization = this.organizationRepository.findById(1001L).get();
         assertThat(testOrganization.getName()).isEqualTo(DEFAULT_NAME);
         assertThat(testOrganization.getMail()).isEqualTo(DEFAULT_MAIL);
         assertThat(testOrganization.getPhone()).isEqualTo(DEFAULT_PHONE);
@@ -309,7 +310,7 @@ class OrganizationResourceIT {
         // Validate the Organization in the database
         List<Organization> organizationList = this.organizationRepository.findAll();
         assertThat(organizationList).hasSize(databaseSizeBeforeUpdate);
-        Organization testOrganization = organizationList.get(organizationList.size() - 1);
+        Organization testOrganization = this.organizationRepository.findById(organizationDTO.getId()).get();
         assertThat(testOrganization.getName()).isEqualTo(UPDATED_NAME);
         assertThat(testOrganization.getMail()).isEqualTo(UPDATED_MAIL);
         assertThat(testOrganization.getPhone()).isEqualTo(UPDATED_PHONE);
@@ -401,7 +402,7 @@ class OrganizationResourceIT {
         // Validate the Organization in the database
         List<Organization> organizationList = this.organizationRepository.findAll();
         assertThat(organizationList).hasSize(databaseSizeBeforeUpdate);
-        Organization testOrganization = organizationList.get(organizationList.size() - 1);
+        Organization testOrganization = this.organizationRepository.findById(this.organization.getId()).get();
         assertThat(testOrganization.getName()).isEqualTo(UPDATED_NAME);
         assertThat(testOrganization.getMail()).isEqualTo(DEFAULT_MAIL);
         assertThat(testOrganization.getPhone()).isEqualTo(DEFAULT_PHONE);
@@ -435,7 +436,7 @@ class OrganizationResourceIT {
         // Validate the Organization in the database
         List<Organization> organizationList = this.organizationRepository.findAll();
         assertThat(organizationList).hasSize(databaseSizeBeforeUpdate);
-        Organization testOrganization = organizationList.get(organizationList.size() - 1);
+        Organization testOrganization = this.organizationRepository.findById(this.organization.getId()).get();
         assertThat(testOrganization.getName()).isEqualTo(UPDATED_NAME);
         assertThat(testOrganization.getMail()).isEqualTo(UPDATED_MAIL);
         assertThat(testOrganization.getPhone()).isEqualTo(UPDATED_PHONE);
@@ -534,7 +535,7 @@ class OrganizationResourceIT {
 
         // Validate the database contains no more item
         List<Organization> list = this.organizationRepository.findAll();
-        assertThat(list).hasSize(databaseSizeBeforeDelete - 1);
+        assertThat(list).hasSize(251);
     }
 
 }

@@ -37,7 +37,6 @@ class OrganizationActivationKafkaEventConsumerIT extends AbstractKafkaConsumerIT
 
     @BeforeEach
     public void initTest() {
-        this.organizationRepository.deleteAll();
         this.waitForAssignment();
     }
 
